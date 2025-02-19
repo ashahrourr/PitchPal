@@ -1,245 +1,385 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function Home() {
-    const [file, setFile] = useState(null);
-    const [transcript, setTranscript] = useState("");
-    const [clarityScore, setClarityScore] = useState(null);
-    const [tone, setTone] = useState("");
-    const [persuasionScore, setPersuasionScore] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [fillerScore, setFillerScore] = useState(null);
-    const [wordsPerMinute, setWordsPerMinute] = useState(null);
-    const [expectedTone, setExpectedTone] = useState("");
-    const [toneFeedback, setToneFeedback] = useState("");
-    const [benchmarkScore, setBenchmarkScore] = useState({});
-    const [improvementSuggestions, setImprovementSuggestions] = useState([]);
-    const [benchmarkIdeal, setBenchmarkIdeal] = useState({});
+  const [challenges, setChallenges] = useState([]);
+  const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [evaluation, setEvaluation] = useState({
+    scores: {
+      persuasion: null,
+      relevance: null,
+      objection_handling: null,
+      framework_adherence: null
+    },
+    feedback: [],
+    keyPhrases: [],
+    transcript: "",
+    passed: null
+  });
 
+  // Fetch challenges from backend
+  useEffect(() => {
+    fetch("http://localhost:8000/challenges")
+      .then((res) => res.json())
+      .then((data) => setChallenges(data.challenges))
+      .catch((error) => console.error("Error fetching challenges:", error));
+  }, []);
 
+  const selectChallenge = (challenge) => {
+    setSelectedChallenge(challenge);
+    setEvaluation({
+      scores: {
+        persuasion: null,
+        relevance: null,
+        objection_handling: null,
+        framework_adherence: null
+      },
+      feedback: [],
+      keyPhrases: [],
+      transcript: "",
+      passed: null
+    });
+    setFile(null);
+  };
 
+  const handleUpload = async () => {
+    if (!file || !selectedChallenge) {
+      alert("Please select a challenge and upload a file.");
+      return;
+    }
+    setLoading(true);
 
-    const getColor = (score, type) => {
-        if (type === "tone") {
-            return score === "Positive" ? "text-green-500" : score === "Negative" ? "text-red-500" : "text-gray-500";
-        } else {
-            return score > 0.7 ? "text-green-500" : score > 0.3 ? "text-yellow-500" : "text-red-500";
-        }
-    };
+    const formData = new FormData();
+    formData.append("file", file);
 
-    const handleUpload = async () => {
-        if (!file) return alert("Please select a file");
-        setLoading(true);
-    
-        const formData = new FormData();
-        formData.append("file", file);
-    
-        try {
-            const response = await fetch("http://127.0.0.1:8000/transcribe", {
-                method: "POST",
-                body: formData,
-            });
-    
-            if (!response.ok) {
-                throw new Error("Failed to fetch transcription");
-            }
-    
-            const data = await response.json();
-            setTranscript(data.transcript);
-            setClarityScore(data.clarity_score);
-            setTone(data.tone);
-            setPersuasionScore(data.persuasion_score);
-            setFillerScore(data.filler_score);
-            setWordsPerMinute(data.words_per_minute);
-            setExpectedTone(data.expected_tone);
-            setToneFeedback(data.tone_feedback);
-            setBenchmarkScore(data.benchmark_score);
-            setBenchmarkIdeal(data.benchmark_ideal); // Store ideal benchmarks
-            setImprovementSuggestions(data.improvement_suggestions);
+    try {
+      const response = await fetch(
+        `http://localhost:8000/evaluate/${selectedChallenge.id}`,
+        { method: "POST", body: formData }
+      );
 
+      if (!response.ok) throw new Error("Analysis failed");
+      const data = await response.json();
 
-        } catch (error) {
-            console.error("Error:", error);
-            alert("Error uploading file. Please try again.");
-        }
-    
-        setLoading(false);
-    };
-    
-    
+      setEvaluation({
+        scores: data.scores,
+        feedback: data.feedback,
+        keyPhrases: data.key_phrases || [],
+        transcript: data.transcript,
+        passed: data.passed
+      });
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl p-8 transition-all duration-300">
-                <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    Sales Pitch Analyzer
-                </h1>
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Error processing your speech. Please try again.");
+    }
+    setLoading(false);
+  };
 
-                <div className="space-y-6">
-                    {/* File Upload Section */}
-                    <div className="flex flex-col items-center border-2 border-dashed border-gray-300 rounded-xl p-8 hover:border-indigo-500 transition-colors">
-                        <input
-                            type="file"
-                            accept="audio/*"
-                            onChange={(e) => setFile(e.target.files[0])}
-                            id="file-upload"
-                            className="hidden"
-                        />
-                        <label
-                            htmlFor="file-upload"
-                            className="cursor-pointer flex flex-col items-center"
-                        >
-                            <svg
-                                className="w-12 h-12 text-indigo-500 mb-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
-                                />
-                            </svg>
-                            <span className="text-lg font-medium text-gray-600">
-                                {file ? file.name : "Choose audio file"}
-                            </span>
-                            <span className="text-sm text-gray-500 mt-2">
-                                MP3, WAV, or AAC (MAX. 5MB)
-                            </span>
-                        </label>
-                    </div>
-
-                    {/* Analyze Button */}
-                    <button
-                        onClick={handleUpload}
-                        disabled={loading}
-                        className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                    >
-                        {loading ? (
-                            <>
-                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Analyzing...
-                            </>
-                        ) : (
-                            "Analyze Speech"
-                        )}
-                    </button>
-
-                    {transcript && (
-                        <div className="mt-8 space-y-6">
-                            {/* Transcript Section */}
-                            <div className="bg-gray-50 rounded-xl p-6">
-                                <h2 className="text-xl font-semibold text-gray-800 mb-4">Transcript</h2>
-                                <p className="text-gray-600 leading-relaxed">{transcript}</p>
-                            </div>
-
-                            {/* Metrics Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {/* Filler Words */}
-                                <div className="bg-red-50 p-5 rounded-xl">
-                                    <h3 className="text-sm font-semibold text-red-600 mb-2">Filler Words</h3>
-                                    <div className={`text-3xl font-bold ${getColor(fillerScore)}`}>
-                                        {fillerScore}
-                                        <span className="text-sm ml-1">/1.0</span>
-                                    </div>
-                                    <div className="mt-2 text-sm text-gray-600">
-                                        Ideal: {benchmarkIdeal.filler_words}%
-                                    </div>
-                                </div>
-
-                                {/* Speaking Speed */}
-                                <div className="bg-yellow-50 p-5 rounded-xl">
-                                    <h3 className="text-sm font-semibold text-yellow-600 mb-2">Speaking Speed</h3>
-                                    <div className="text-3xl font-bold">
-                                        {wordsPerMinute} <span className="text-sm ml-1">WPM</span>
-                                    </div>
-                                    <div className="mt-2 text-sm text-gray-600">
-                                        Ideal: {benchmarkIdeal.wpm} WPM
-                                    </div>
-                                </div>
-
-                                {/* Tone Analysis */}
-                                <div className="bg-purple-50 p-5 rounded-xl">
-                                    <h3 className="text-sm font-semibold text-purple-600 mb-2">Tone Analysis</h3>
-                                    <div className={`text-lg font-semibold ${getColor(tone, "tone")}`}>
-                                        {tone}
-                                    </div>
-                                    <div className="mt-2 text-sm text-gray-600">
-                                        Expected: {expectedTone}
-                                    </div>
-                                    <p className="text-xs text-gray-600 italic mt-1">{toneFeedback}</p>
-                                </div>
-
-                                {/* Persuasion Score */}
-                                <div className="bg-blue-50 p-5 rounded-xl">
-                                    <h3 className="text-sm font-semibold text-blue-600 mb-2">Persuasion</h3>
-                                    <div className={`text-3xl font-bold ${getColor(persuasionScore)}`}>
-                                        {persuasionScore}
-                                        <span className="text-sm ml-1">/1.0</span>
-                                    </div>
-                                    <div className="mt-2 text-sm text-gray-600">
-                                        Ideal: {benchmarkIdeal.persuasion}%
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Benchmark Comparison */}
-                            <div className="mt-8 bg-gray-50 p-6 rounded-xl">
-                                <h2 className="text-xl font-semibold text-gray-800 mb-4">Performance vs Elite Benchmark</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {Object.entries(benchmarkScore).map(([metric, value]) => (
-                                        <div key={metric} className="bg-white p-4 rounded-lg shadow-sm">
-                                            <div className="flex justify-between items-center">
-                                                <span className="capitalize font-medium text-gray-700">
-                                                    {metric.replace('_', ' ')}
-                                                </span>
-                                                <span className={`text-lg font-semibold ${getColor(value / 100)}`}>
-                                                    {value}%
-                                                </span>
-                                            </div>
-                                            <div className="mt-2 h-2 bg-gray-200 rounded-full">
-                                                <div
-                                                    className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full"
-                                                    style={{ width: `${value}%` }}
-                                                ></div>
-                                            </div>
-                                            <div className="mt-2 text-sm text-gray-500">
-                                                Elite Benchmark: {benchmarkIdeal[metric]}%
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Improvement Suggestions */}
-                            <div className="mt-4 bg-green-50 p-6 rounded-xl">
-                                <h2 className="text-lg font-semibold text-green-700 mb-4">Improvement Suggestions</h2>
-                                <div className="space-y-3">
-                                    {improvementSuggestions.length > 0 ? (
-                                        improvementSuggestions.map((suggestion, index) => (
-                                            <div key={index} className="flex items-start">
-                                                <span className="flex-shrink-0 w-5 h-5 bg-green-100 text-green-700 rounded-full flex items-center justify-center mr-3">
-                                                    {index + 1}
-                                                </span>
-                                                <p className="text-gray-700">{suggestion}</p>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-green-700 font-medium">
-                                            🎉 No major improvements needed. Great job!
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+  const ScoreCard = ({ label, value }) => (
+    <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-800">
+          Target: {selectedChallenge?.scenario.success_metrics[label.toLowerCase()] || 0}%
+        </span>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="text-3xl font-bold text-gray-900">
+          {value}%
         </div>
-    );
+        <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-500"
+            style={{ width: `${value}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900">
+      {/* Header */}
+      <header className="flex items-center justify-between px-6 py-4 bg-white shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold">SC</span>
+          </div>
+          <span className="text-xl font-bold">SalesCoach</span>
+        </div>
+        <nav className="flex items-center gap-6 text-sm">
+          <button className="text-gray-600 hover:text-orange-600 transition-colors">
+            Challenges
+          </button>
+          <button className="text-gray-600 hover:text-orange-600 transition-colors">
+            Progress
+          </button>
+          <button className="text-gray-600 hover:text-orange-600 transition-colors">
+            Profile
+          </button>
+        </nav>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Challenges Sidebar */}
+        <aside className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className="p-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold">Training Challenges</h2>
+            <p className="text-sm text-gray-500 mt-1">Master sales scenarios</p>
+          </div>
+          <div className="p-2">
+            {challenges.map((challenge) => (
+              <button
+                key={challenge.id}
+                onClick={() => selectChallenge(challenge)}
+                className={`w-full text-left p-3 rounded-lg mb-2 transition-all ${
+                  selectedChallenge?.id === challenge.id
+                    ? 'bg-orange-50 border-2 border-orange-500'
+                    : 'hover:bg-gray-50 border-2 border-transparent'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">
+                    {challenge.title}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    challenge.difficulty === 'Easy' 
+                      ? 'bg-green-100 text-green-800'
+                      : challenge.difficulty === 'Medium'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {challenge.difficulty}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                  {challenge.description}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  {challenge.scenario.key_objections.slice(0, 2).map((obj, i) => (
+                    <span key={i} className="text-xs px-2 py-1 bg-gray-100 rounded-full">
+                      {obj}
+                    </span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto p-8">
+          {!selectedChallenge ? (
+            <div className="flex items-center justify-center h-full text-gray-400">
+              Select a challenge from the sidebar to begin
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto space-y-8">
+              {/* Challenge Header */}
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {selectedChallenge.title}
+                </h1>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
+                    {selectedChallenge.category}
+                  </span>
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <span>Expected Tone:</span>
+                    <span className="font-medium text-gray-700">
+                      {selectedChallenge.scenario.expected_tone}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scenario Details */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h2 className="text-lg font-semibold mb-4">Scenario Details</h2>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Customer Profile</h3>
+                    <p className="text-gray-700">
+                      {selectedChallenge.scenario.customer_profile}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Key Objections</h3>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {selectedChallenge.scenario.key_objections.map((obj, i) => (
+                        <li key={i} className="text-gray-700">{obj}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload Section */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h2 className="text-lg font-semibold mb-6">Record Your Pitch</h2>
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center transition-colors hover:border-orange-200">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => setFile(e.target.files[0])}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="cursor-pointer flex flex-col items-center space-y-4"
+                  >
+                    <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center">
+                      <svg
+                        className="w-8 h-8 text-orange-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 font-medium">
+                        {file ? file.name : 'Click to upload audio file'}
+                      </p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Supported formats: MP3, WAV, AAC (max 5MB)
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                <button
+                  onClick={handleUpload}
+                  disabled={loading}
+                  className="mt-6 w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          fill="none"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Analyzing...
+                    </span>
+                  ) : (
+                    'Submit for Evaluation'
+                  )}
+                </button>
+              </div>
+
+              {/* Results Section */}
+              {evaluation.passed !== null && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-8">
+                  {/* Result Header */}
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold">Evaluation Results</h2>
+                    <span className={`px-4 py-2 rounded-full text-sm font-medium ${
+                      evaluation.passed
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {evaluation.passed ? 'Challenge Passed' : 'Needs Improvement'}
+                    </span>
+                  </div>
+
+                  {/* Score Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <ScoreCard label="Persuasion" value={evaluation.scores.persuasion} />
+                    <ScoreCard label="Relevance" value={evaluation.scores.relevance} />
+                    <ScoreCard
+                      label="Objection Handling"
+                      value={evaluation.scores.objection_handling}
+                    />
+                    <ScoreCard
+                      label="Framework Adherence"
+                      value={evaluation.scores.framework_adherence}
+                    />
+                  </div>
+
+                  {/* Key Phrases */}
+                  {evaluation.keyPhrases.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Key Phrases Detected</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {evaluation.keyPhrases.map((phrase, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                          >
+                            {phrase}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Feedback */}
+                  {evaluation.feedback.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Improvement Suggestions</h3>
+                      <div className="space-y-3">
+                        {evaluation.feedback.map((item, index) => (
+                          <div
+                            key={index}
+                            className="flex items-start p-4 bg-red-50 rounded-lg border border-red-100"
+                          >
+                            <svg
+                              className="flex-shrink-0 w-5 h-5 text-red-600 mt-0.5 mr-3"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                              />
+                            </svg>
+                            <p className="text-red-700">{item}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transcript */}
+                  {evaluation.transcript && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Full Transcript</h3>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {evaluation.transcript}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
 }
